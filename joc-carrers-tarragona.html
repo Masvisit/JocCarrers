@@ -96,6 +96,37 @@
   .taula-final span:last-child { color: var(--suau); font-variant-numeric: tabular-nums; }
   .descartades { margin-top: 26px; font-size: .9rem; color: var(--suau); }
   .descartades b { display: block; color: var(--pedra); margin-bottom: 6px; font-size: .95rem; }
+
+  /* Ajuda */
+  #btn-ajuda {
+    position: fixed; top: 14px; right: 14px; z-index: 40;
+    width: 38px; height: 38px; padding: 0; border-radius: 50%;
+    background: var(--fons); color: var(--suau); border: 1.5px solid var(--linia);
+    font-size: 1.05rem; font-weight: 700; display: none;
+  }
+  #btn-ajuda.visible { display: block; }
+  #vel {
+    position: fixed; inset: 0; z-index: 60; display: none;
+    background: rgba(8,20,25,.82); padding: 20px; overflow-y: auto;
+  }
+  #vel.obert { display: flex; align-items: center; justify-content: center; }
+  .full {
+    background: var(--fons); border-radius: 18px; padding: 24px 22px;
+    max-width: 30rem; width: 100%; border-top: 5px solid var(--or);
+  }
+  .full h3 { margin: 0 0 14px; font-size: 1.2rem; letter-spacing: -.01em; }
+  .full ol, .full ul { margin: 0 0 18px; padding-left: 1.15rem; }
+  .full li { margin-bottom: 9px; line-height: 1.5; }
+  .full p { margin: 0 0 16px; line-height: 1.5; }
+  .full .peu { margin-bottom: 18px; }
+  .passos { counter-reset: pas; list-style: none; padding: 0; }
+  .passos li { display: flex; gap: 12px; align-items: flex-start; }
+  .passos li::before {
+    counter-increment: pas; content: counter(pas);
+    flex: 0 0 26px; height: 26px; border-radius: 50%; background: var(--or); color: var(--mar);
+    font-weight: 700; font-size: .85rem; display: flex; align-items: center; justify-content: center;
+    margin-top: 1px;
+  }
   #mapa { height: 46dvh; min-height: 240px; border-radius: 14px; margin-bottom: 16px; background: var(--fons); }
   #carregant { display: flex; align-items: center; justify-content: center; height: 100%; color: var(--suau); font-size: .92rem; text-align: center; padding: 0 20px; }
   .empenta { margin-top: auto; padding-top: 16px; }
@@ -106,8 +137,28 @@
 </head>
 <body>
 
+<!-- ───────────── EXPLICACIÓ ───────────── -->
+<section id="p-intro" class="pantalla activa">
+  <h1>On és?</h1>
+  <p class="peu">Un joc per discutir, a la taula, on para cada carrer de Tarragona.</p>
+
+  <ol class="passos" style="margin-top:26px">
+    <li>Al teu torn tries una temàtica: carrers, places, avingudes o monuments.</li>
+    <li>Surt un nom i tens 20 segons per dir en veu alta on és. Els altres jutgen.</li>
+    <li>Prems "Veure la solució" i surt el mapa amb el lloc marcat i els carrers del voltant.</li>
+    <li>Entre tots decidiu si ha estat encert o error, i el torn passa al següent.</li>
+  </ol>
+
+  <p>Amb dos encerts d'una mateixa temàtica t'emportes el seu formatget. El segon sempre és un lloc mític de la ciutat i s'ha de clavar exacte. Qui aconsegueixi els quatre formatgets, guanya.</p>
+
+  <div class="empenta">
+    <button class="ample" onclick="pantalla('p-inici')">Som-hi</button>
+    <button class="menut" onclick="pantalla('p-inici')">Saltar l'explicació</button>
+  </div>
+</section>
+
 <!-- ───────────── INICI ───────────── -->
-<section id="p-inici" class="pantalla activa">
+<section id="p-inici" class="pantalla">
   <h1>On és?</h1>
   <p class="peu">Surt un nom, tens 20 segons per situar-lo en veu alta. Dos encerts en una temàtica et donen el formatget: el segon sempre és un lloc mític de la ciutat. Qui completi els quatre, guanya.</p>
 
@@ -176,6 +227,16 @@
     <button class="ample buida" style="margin-top:24px" onclick="location.reload()">Una altra partida</button>
   </div>
 </section>
+
+<button id="btn-ajuda" onclick="obreAjuda()" aria-label="Com funciona">?</button>
+
+<div id="vel" onclick="if(event.target===this) tancaAjuda()">
+  <div class="full">
+    <h3 id="ajuda-titol"></h3>
+    <div id="ajuda-cos"></div>
+    <button class="ample" onclick="tancaAjuda()">Entesos</button>
+  </div>
+</div>
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script>
@@ -253,6 +314,7 @@ const memoria = new Map();  // nom -> {lat, lon, barri}
 let mapa = null;
 let rellotge = null;
 let queden = 0;
+let pausat = false;
 let pintaRellotge = null;
 const vistes = new Set();
 
@@ -305,9 +367,69 @@ function comencar() {
 
 /* ══════════ TORN ══════════ */
 
+/* ══════════ AJUDA ══════════ */
+
+const AJUDA = {
+  "p-inici": {
+    titol: "Preparar la partida",
+    cos: `<p>Poseu de 2 a 8 jugadors. Els noms no cal escriure'ls: si els deixeu en blanc seran Jugador 1, Jugador 2 i així.</p>
+          <p class="peu">Els noms es recorden per a la propera partida.</p>`
+  },
+  "p-torn": {
+    titol: "El teu torn",
+    cos: `<p>Tria la temàtica que vulguis jugar. Les que ja has guanyat surten apagades: no les pots repetir.</p>
+          <ul>
+            <li>El cercle ple vol dir formatget guanyat.</li>
+            <li>El cercle amb el contorn de color vol dir que en tens un de dos.</li>
+          </ul>
+          <p class="peu">El torn passa sempre, s'encerti o no.</p>`
+  },
+  "p-pregunta": {
+    titol: "Respondre",
+    cos: `<p>Digues en veu alta on és, abans que s'acabin els 20 segons. Què s'ha de dir exactament ho tens escrit a la mateixa targeta, i canvia segons la temàtica.</p>
+          <ul>
+            <li><b>Pista</b> et diu el barri, però et deixa el rellotge en 10 segons.</li>
+            <li>Si el rellotge arriba a zero, salta sol al mapa.</li>
+            <li>Si la pregunta no serveix, descarta-la: no comptarà i en sortirà una altra.</li>
+          </ul>
+          <p class="peu">El rellotge està aturat mentre llegeixes això.</p>`
+  },
+  "p-solucio": {
+    titol: "La solució",
+    cos: `<p>El cercle groc marca el lloc. Pots moure el mapa i fer zoom per veure què hi ha al voltant.</p>
+          <p>Decidiu entre tots si la resposta valia i premeu Encert o Error. Als reptes sigueu estrictes: s'ha de clavar el carrer o la plaça.</p>
+          <p class="peu">Si el mapa no carrega o el punt és clarament equivocat, descarta la pregunta.</p>`
+  },
+  "p-final": {
+    titol: "Final de partida",
+    cos: `<p>Guanya qui completa els quatre formatgets. A sota tens els encerts i els errors de tothom.</p>
+          <p class="peu">Les preguntes descartades queden llistades perquè les puguis corregir al codi.</p>`
+  }
+};
+
+let pantallaActual = "p-intro";
+
+function obreAjuda() {
+  const a = AJUDA[pantallaActual];
+  if (!a) return;
+  pausaRellotge();
+  document.getElementById("ajuda-titol").textContent = a.titol;
+  document.getElementById("ajuda-cos").innerHTML = a.cos;
+  document.getElementById("vel").classList.add("obert");
+}
+
+function tancaAjuda() {
+  document.getElementById("vel").classList.remove("obert");
+  reprenRellotge();
+}
+
+/* ══════════ TORN ══════════ */
+
 function pantalla(id) {
   document.querySelectorAll(".pantalla").forEach(s => s.classList.remove("activa"));
   document.getElementById(id).classList.add("activa");
+  pantallaActual = id;
+  document.getElementById("btn-ajuda").classList.toggle("visible", !!AJUDA[id]);
   window.scrollTo(0, 0);
 }
 
@@ -407,6 +529,10 @@ function arrencaRellotge() {
     caixa.classList.toggle("poc", queden <= 5);
   };
   pintaRellotge();
+  engega();
+}
+
+function engega() {
   rellotge = setInterval(() => {
     queden--;
     pintaRellotge();
@@ -416,6 +542,16 @@ function arrencaRellotge() {
       mostrarSolucio();
     }
   }, 1000);
+}
+
+// Llegir l'ajuda no ha de costar temps de resposta.
+function pausaRellotge() {
+  if (rellotge) { clearInterval(rellotge); rellotge = null; pausat = true; }
+}
+
+function reprenRellotge() {
+  if (pausat && pantallaActual === "p-pregunta" && queden > 0) engega();
+  pausat = false;
 }
 
 // La pista costa temps: et deixa com a molt els segons que li diguis.
@@ -428,6 +564,7 @@ function retallaTemps(maxim) {
 
 function aturaRellotge() {
   if (rellotge) { clearInterval(rellotge); rellotge = null; }
+  pausat = false;
 }
 
 function xiulet() {
