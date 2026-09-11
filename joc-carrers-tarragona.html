@@ -1,0 +1,368 @@
+<!DOCTYPE html>
+<html lang="ca">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>On és? · Carrers de Tarragona</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<style>
+  :root {
+    --mar: #10262f;
+    --fons: #16323d;
+    --pedra: #e8e0d1;
+    --suau: #8fa6ae;
+    --or: #e0a93b;
+    --linia: rgba(232,224,209,.14);
+    --c1: #e0a93b;
+    --c2: #66b2a0;
+    --c3: #d9694f;
+    --c4: #a284c4;
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { height: 100%; }
+  body {
+    margin: 0;
+    background: var(--mar);
+    color: var(--pedra);
+    font: 16px/1.5 ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+    overscroll-behavior: none;
+  }
+  .pantalla { display: none; min-height: 100dvh; padding: 22px 18px 28px; max-width: 34rem; margin-inline: auto; }
+  .pantalla.activa { display: flex; flex-direction: column; }
+
+  h1 { font-size: 1.8rem; line-height: 1.15; margin: 0 0 6px; letter-spacing: -.02em; }
+  h2 { font-size: 1.05rem; margin: 0 0 14px; font-weight: 600; }
+  .peu { color: var(--suau); font-size: .92rem; }
+
+  button {
+    font: inherit; font-weight: 600; border: none; border-radius: 12px;
+    padding: 15px; cursor: pointer; background: var(--or); color: var(--mar);
+  }
+  button:disabled { opacity: .4; cursor: default; }
+  .buida { background: transparent; color: var(--pedra); border: 1.5px solid var(--linia); }
+  .ample { width: 100%; }
+  .fila { display: flex; gap: 10px; }
+  .fila > button { flex: 1; }
+
+  /* Inici */
+  .jugadors { display: flex; flex-direction: column; gap: 8px; margin: 18px 0; }
+  .jugadors input {
+    font: inherit; padding: 13px; border-radius: 10px; width: 100%;
+    border: 1.5px solid var(--linia); background: var(--fons); color: var(--pedra);
+  }
+  .jugadors input:focus { outline: 2px solid var(--or); outline-offset: 1px; }
+  .compta { display: flex; align-items: center; gap: 14px; margin-top: 20px; }
+  .compta button { width: 46px; height: 46px; padding: 0; font-size: 1.3rem; }
+  .compta span { font-size: 1.15rem; font-weight: 600; min-width: 8.5rem; }
+
+  /* Marcador */
+  .marcador { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 4px; margin-bottom: 18px; }
+  .fitxa { flex: 0 0 auto; padding: 9px 13px; border-radius: 10px; background: var(--fons); border: 1.5px solid transparent; }
+  .fitxa.torn { border-color: var(--or); }
+  .fitxa .nom { font-size: .9rem; font-weight: 600; white-space: nowrap; }
+  .formatgets { display: flex; gap: 4px; margin-top: 6px; }
+  .fg { width: 11px; height: 11px; border-radius: 50%; border: 1.5px solid var(--linia); }
+  .fg.guanyat { border-color: transparent; }
+
+  /* Pregunta */
+  .targeta {
+    background: var(--fons); border-radius: 18px; padding: 26px 22px;
+    border-top: 5px solid var(--or); margin-bottom: 18px;
+  }
+  .categoria { font-size: .85rem; font-weight: 600; color: var(--suau); margin-bottom: 10px; }
+  .enunciat { font-size: 1.7rem; line-height: 1.2; font-weight: 700; letter-spacing: -.02em; }
+  .repte-avis { margin-top: 14px; font-size: .92rem; color: var(--or); }
+  #mapa { height: 46dvh; min-height: 240px; border-radius: 14px; margin-bottom: 16px; background: var(--fons); }
+  #carregant { display: flex; align-items: center; justify-content: center; height: 100%; color: var(--suau); font-size: .92rem; text-align: center; padding: 0 20px; }
+  .empenta { margin-top: auto; padding-top: 16px; }
+
+  /* Final */
+  .guanyador { font-size: 2.1rem; font-weight: 700; margin: 10px 0 4px; letter-spacing: -.02em; }
+</style>
+</head>
+<body>
+
+<!-- ───────────── INICI ───────────── -->
+<section id="p-inici" class="pantalla activa">
+  <h1>On és?</h1>
+  <p class="peu">Un jugador llegeix el nom en veu alta, els altres diuen on és. Qui completi els quatre formatgets, guanya.</p>
+
+  <div class="compta">
+    <button class="buida" onclick="canviaJugadors(-1)">–</button>
+    <span id="txt-jugadors">2 jugadors</span>
+    <button class="buida" onclick="canviaJugadors(1)">+</button>
+  </div>
+
+  <div class="jugadors" id="camps"></div>
+
+  <div class="empenta">
+    <button class="ample" onclick="comencar()">Començar la partida</button>
+  </div>
+</section>
+
+<!-- ───────────── TORN ───────────── -->
+<section id="p-torn" class="pantalla">
+  <div class="marcador" id="marcador"></div>
+  <h2 id="titol-torn"></h2>
+  <p class="peu">Tria la categoria que vulguis jugar.</p>
+  <div class="jugadors" id="botons-categoria"></div>
+</section>
+
+<!-- ───────────── PREGUNTA ───────────── -->
+<section id="p-pregunta" class="pantalla">
+  <div class="marcador" id="marcador-2"></div>
+  <div class="targeta" id="targeta">
+    <div class="categoria" id="cat-actual"></div>
+    <div class="enunciat" id="enunciat"></div>
+    <div class="repte-avis" id="repte-avis" style="display:none">Encerta-ho i t'emportes el formatget.</div>
+  </div>
+  <div class="empenta">
+    <button class="ample" onclick="mostrarSolucio()">Veure la solució</button>
+  </div>
+</section>
+
+<!-- ───────────── SOLUCIÓ ───────────── -->
+<section id="p-solucio" class="pantalla">
+  <h2 id="titol-solucio"></h2>
+  <div id="mapa"><div id="carregant">Carregant el mapa…</div></div>
+  <div class="fila">
+    <button class="buida" onclick="resoldre(false)">Error</button>
+    <button onclick="resoldre(true)">Encert</button>
+  </div>
+</section>
+
+<!-- ───────────── FINAL ───────────── -->
+<section id="p-final" class="pantalla">
+  <div class="empenta" style="margin-top:auto;margin-bottom:auto">
+    <p class="peu">Partida acabada</p>
+    <div class="guanyador" id="txt-guanyador"></div>
+    <p class="peu" id="txt-resum"></p>
+    <button class="ample buida" style="margin-top:24px" onclick="location.reload()">Una altra partida</button>
+  </div>
+</section>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+/* ══════════ CONTINGUT DEL JOC ══════════
+   Afegeix, treu o corregeix noms lliurement. L'app busca cada lloc al mapa
+   pel seu nom, així que ha de coincidir amb el nom oficial d'OpenStreetMap. */
+
+const CATEGORIES = [
+  { id: "carrers",   nom: "Carrers",             color: "var(--c1)" },
+  { id: "places",    nom: "Places i racons",     color: "var(--c2)" },
+  { id: "rambles",   nom: "Avingudes i rambles", color: "var(--c3)" },
+  { id: "monuments", nom: "Monuments",           color: "var(--c4)" }
+];
+
+const PREGUNTES = {
+  carrers: [
+    "Carrer Major", "Carrer dels Cavallers", "Carrer de la Merceria",
+    "Carrer de Santa Anna", "Carrer del Trinquet Vell", "Carrer de la Nau",
+    "Carrer de les Coques", "Carrer de Granada", "Carrer de la Civaderia",
+    "Baixada de la Peixateria", "Baixada del Roser", "Carrer de la Portella",
+    "Carrer de la Unió", "Carrer d'Apodaca", "Carrer del Comte de Rius",
+    "Carrer de Sant Agustí", "Carrer d'Armanyà", "Carrer de Fortuny",
+    "Carrer del Gasòmetre", "Carrer de Reding", "Carrer de Pere Martell",
+    "Carrer de Smith", "Carrer de Cristòfor Colom", "Carrer de Canyelles",
+    "Carrer de Sant Francesc", "Carrer de Méndez Núñez", "Carrer de l'Assalt",
+    "Carrer de Jaume I", "Carrer de Sant Pere", "Carrer d'Isaac Albéniz",
+    "Carrer d'Enric Granados", "Carrer de Manuel de Falla"
+  ],
+  places: [
+    "Plaça de la Font", "Plaça del Rei", "Plaça del Fòrum", "Plaça del Pallol",
+    "Plaça dels Sedassos", "Plaça de la Pedrera", "Plaça del Pla",
+    "Plaça Corsini", "Plaça Imperial Tàrraco", "Plaça de la Llibertat",
+    "Plaça Prim", "Plaça de Sant Joan", "Plaça de Verdaguer"
+  ],
+  rambles: [
+    "Rambla Nova", "Rambla Vella", "Via Augusta", "Avinguda de Catalunya",
+    "Avinguda de Roma", "Avinguda de Prat de la Riba", "Avinguda d'Andorra",
+    "Avinguda de Ramón y Cajal", "Passeig de Torroja", "Passeig de les Palmeres",
+    "Passeig Arqueològic", "Avinguda del President Companys",
+    "Avinguda de Pau Casals", "Avinguda del Pare Palau"
+  ],
+  monuments: [
+    "Amfiteatre Romà de Tarragona", "Catedral de Tarragona", "Casa Canals",
+    "Casa Castellarnau", "Teatre Metropol", "Mercat Central de Tarragona",
+    "Museu Nacional Arqueològic de Tarragona", "Portal del Roser",
+    "Monument als Castellers", "Balcó del Mediterrani"
+  ]
+};
+
+/* Els reptes donen formatget. Tots són llocs mítics de la ciutat. */
+const REPTES = [
+  "Casa Canals", "Circ Romà de Tarragona", "Fòrum de la Colònia",
+  "Font del Centenari", "Torre del Pretori", "Necròpolis Paleocristiana",
+  "Amfiteatre Romà de Tarragona", "Passeig Arqueològic", "Casa Castellarnau",
+  "Portal del Roser", "Monument als Castellers", "Teatre Metropol"
+];
+
+/* Zona de cerca: el centre de Tarragona i Sant Pere i Sant Pau. */
+const ZONA = "1.228,41.152,1.278,41.105";
+
+/* ══════════ ESTAT ══════════ */
+
+let nJugadors = 2;
+let jugadors = [];
+let torn = 0;
+let actual = null;          // { text, categoria, esRepte }
+const memoria = new Map();  // nom -> {lat, lon}
+let mapa = null;
+const vistes = new Set();
+
+/* ══════════ INICI ══════════ */
+
+function canviaJugadors(d) {
+  nJugadors = Math.min(8, Math.max(2, nJugadors + d));
+  document.getElementById("txt-jugadors").textContent = nJugadors + " jugadors";
+  pintaCamps();
+}
+
+function pintaCamps() {
+  const cont = document.getElementById("camps");
+  const previs = [...cont.querySelectorAll("input")].map(i => i.value);
+  cont.innerHTML = "";
+  for (let i = 0; i < nJugadors; i++) {
+    const inp = document.createElement("input");
+    inp.type = "text";
+    inp.placeholder = "Jugador " + (i + 1);
+    inp.maxLength = 16;
+    inp.value = previs[i] || "";
+    cont.appendChild(inp);
+  }
+}
+
+function comencar() {
+  jugadors = [...document.querySelectorAll("#camps input")].map((inp, i) => ({
+    nom: inp.value.trim() || "Jugador " + (i + 1),
+    formatgets: new Set()
+  }));
+  torn = 0;
+  pantalla("p-torn");
+  pintaTorn();
+}
+
+/* ══════════ TORN ══════════ */
+
+function pantalla(id) {
+  document.querySelectorAll(".pantalla").forEach(s => s.classList.remove("activa"));
+  document.getElementById(id).classList.add("activa");
+  window.scrollTo(0, 0);
+}
+
+function pintaMarcador(id) {
+  document.getElementById(id).innerHTML = jugadors.map((j, i) => `
+    <div class="fitxa ${i === torn ? "torn" : ""}">
+      <div class="nom">${escapa(j.nom)}</div>
+      <div class="formatgets">
+        ${CATEGORIES.map(c => `<div class="fg ${j.formatgets.has(c.id) ? "guanyat" : ""}"
+          style="${j.formatgets.has(c.id) ? "background:" + c.color : ""}"></div>`).join("")}
+      </div>
+    </div>`).join("");
+}
+
+function pintaTorn() {
+  pintaMarcador("marcador");
+  document.getElementById("titol-torn").textContent = "Toca a " + jugadors[torn].nom;
+  document.getElementById("botons-categoria").innerHTML = CATEGORIES.map(c => `
+    <button class="ample buida" style="border-color:${c.color};color:${c.color}"
+      onclick="jugar('${c.id}')">${c.nom}</button>`).join("");
+}
+
+function tria(llista) {
+  const fresc = llista.filter(x => !vistes.has(x));
+  const font = fresc.length ? fresc : llista;
+  const x = font[Math.floor(Math.random() * font.length)];
+  vistes.add(x);
+  return x;
+}
+
+function jugar(catId) {
+  const cat = CATEGORIES.find(c => c.id === catId);
+  const teFormatget = jugadors[torn].formatgets.has(catId);
+  // Si encara no té el formatget d'aquesta categoria, li toca el repte.
+  const esRepte = !teFormatget;
+
+  actual = {
+    categoria: cat,
+    esRepte,
+    text: esRepte ? tria(REPTES) : tria(PREGUNTES[catId])
+  };
+
+  pintaMarcador("marcador-2");
+  document.getElementById("targeta").style.borderTopColor = cat.color;
+  document.getElementById("cat-actual").textContent = cat.nom;
+  document.getElementById("enunciat").textContent = actual.text;
+  document.getElementById("repte-avis").style.display = esRepte ? "block" : "none";
+  pantalla("p-pregunta");
+}
+
+/* ══════════ SOLUCIÓ ══════════ */
+
+async function mostrarSolucio() {
+  document.getElementById("titol-solucio").textContent = actual.text;
+  pantalla("p-solucio");
+  const caixa = document.getElementById("mapa");
+  caixa.innerHTML = '<div id="carregant">Carregant el mapa…</div>';
+  if (mapa) { mapa.remove(); mapa = null; }
+
+  try {
+    const punt = await localitza(actual.text);
+    caixa.innerHTML = "";
+    mapa = L.map(caixa, { zoomControl: false, attributionControl: false })
+            .setView([punt.lat, punt.lon], actual.esRepte ? 17 : 16);
+    L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", { maxZoom: 19 }).addTo(mapa);
+    L.circle([punt.lat, punt.lon], {
+      radius: 55, color: "#e0a93b", weight: 3, fillColor: "#e0a93b", fillOpacity: .22
+    }).addTo(mapa);
+    L.control.zoom({ position: "bottomright" }).addTo(mapa);
+  } catch (e) {
+    caixa.innerHTML = '<div id="carregant">No s\'ha pogut carregar el mapa.<br>' +
+      'Decidiu-ho vosaltres i seguiu jugant.</div>';
+  }
+}
+
+async function localitza(nom) {
+  if (memoria.has(nom)) return memoria.get(nom);
+  const url = "https://nominatim.openstreetmap.org/search?format=json&limit=1&bounded=1"
+    + "&viewbox=" + ZONA
+    + "&q=" + encodeURIComponent(nom + ", Tarragona");
+  const r = await fetch(url, { headers: { "Accept-Language": "ca" } });
+  const dades = await r.json();
+  if (!dades.length) throw new Error("no trobat");
+  const punt = { lat: +dades[0].lat, lon: +dades[0].lon };
+  memoria.set(nom, punt);
+  return punt;
+}
+
+/* ══════════ RESULTAT ══════════ */
+
+function resoldre(encert) {
+  if (encert && actual.esRepte) {
+    jugadors[torn].formatgets.add(actual.categoria.id);
+    if (jugadors[torn].formatgets.size === CATEGORIES.length) return final();
+  }
+  // Amb un encert repeteix torn; amb un error passa al següent.
+  if (!encert) torn = (torn + 1) % jugadors.length;
+  pantalla("p-torn");
+  pintaTorn();
+}
+
+function final() {
+  document.getElementById("txt-guanyador").textContent = jugadors[torn].nom;
+  const resta = jugadors
+    .filter((_, i) => i !== torn)
+    .map(j => j.nom + " " + j.formatgets.size + "/4")
+    .join(" · ");
+  document.getElementById("txt-resum").textContent = resta;
+  pantalla("p-final");
+}
+
+function escapa(s) {
+  return s.replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+}
+
+pintaCamps();
+</script>
+</body>
+</html>
