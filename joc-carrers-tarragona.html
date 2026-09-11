@@ -62,6 +62,7 @@
   .fitxa .nom { font-size: .9rem; font-weight: 600; white-space: nowrap; }
   .formatgets { display: flex; gap: 4px; margin-top: 6px; }
   .fg { width: 11px; height: 11px; border-radius: 50%; border: 1.5px solid var(--linia); }
+  .fg.mig { border-width: 2px; }
   .fg.guanyat { border-color: transparent; }
 
   /* Pregunta */
@@ -72,6 +73,29 @@
   .categoria { font-size: .85rem; font-weight: 600; color: var(--suau); margin-bottom: 10px; }
   .enunciat { font-size: 1.7rem; line-height: 1.2; font-weight: 700; letter-spacing: -.02em; }
   .repte-avis { margin-top: 14px; font-size: .92rem; color: var(--or); }
+  .instruccio { margin-top: 16px; font-size: .95rem; color: var(--suau); line-height: 1.45; }
+
+  .rellotge { text-align: center; margin-bottom: 14px; }
+  .rellotge .segons { font-size: 3.4rem; font-weight: 700; font-variant-numeric: tabular-nums; letter-spacing: -.03em; line-height: 1; }
+  .rellotge.poc .segons { color: var(--c3); }
+  .barra { height: 4px; border-radius: 2px; background: var(--linia); margin-top: 12px; overflow: hidden; }
+  .barra i { display: block; height: 100%; background: var(--or); transition: width .25s linear; }
+  .rellotge.poc .barra i { background: var(--c3); }
+
+  .pista-text { margin-top: 14px; font-size: .95rem; color: var(--c2); font-weight: 600; }
+  .menut {
+    display: block; margin: 14px auto 0; padding: 8px; background: none; border: none;
+    color: var(--suau); font-size: .85rem; font-weight: 500; text-decoration: underline;
+    text-underline-offset: 3px;
+  }
+  .taula-final { margin: 22px 0 6px; }
+  .taula-final div {
+    display: flex; justify-content: space-between; gap: 14px;
+    padding: 11px 0; border-bottom: 1px solid var(--linia);
+  }
+  .taula-final span:last-child { color: var(--suau); font-variant-numeric: tabular-nums; }
+  .descartades { margin-top: 26px; font-size: .9rem; color: var(--suau); }
+  .descartades b { display: block; color: var(--pedra); margin-bottom: 6px; font-size: .95rem; }
   #mapa { height: 46dvh; min-height: 240px; border-radius: 14px; margin-bottom: 16px; background: var(--fons); }
   #carregant { display: flex; align-items: center; justify-content: center; height: 100%; color: var(--suau); font-size: .92rem; text-align: center; padding: 0 20px; }
   .empenta { margin-top: auto; padding-top: 16px; }
@@ -85,7 +109,7 @@
 <!-- ───────────── INICI ───────────── -->
 <section id="p-inici" class="pantalla activa">
   <h1>On és?</h1>
-  <p class="peu">Un jugador llegeix el nom en veu alta, els altres diuen on és. Qui completi els quatre formatgets, guanya.</p>
+  <p class="peu">Surt un nom, tens 20 segons per situar-lo en veu alta. Dos encerts en una temàtica et donen el formatget: el segon sempre és un lloc mític de la ciutat. Qui completi els quatre, guanya.</p>
 
   <div class="compta">
     <button class="buida" onclick="canviaJugadors(-1)">–</button>
@@ -115,9 +139,19 @@
     <div class="categoria" id="cat-actual"></div>
     <div class="enunciat" id="enunciat"></div>
     <div class="repte-avis" id="repte-avis" style="display:none">Encerta-ho i t'emportes el formatget.</div>
+    <div class="instruccio" id="instruccio"></div>
+    <div class="pista-text" id="pista-text" style="display:none"></div>
   </div>
   <div class="empenta">
-    <button class="ample" onclick="mostrarSolucio()">Veure la solució</button>
+    <div class="rellotge" id="rellotge">
+      <div class="segons" id="segons">20</div>
+      <div class="barra"><i id="barra"></i></div>
+    </div>
+    <div class="fila">
+      <button class="buida" id="btn-pista" onclick="demanarPista()">Pista</button>
+      <button onclick="mostrarSolucio()">Veure la solució</button>
+    </div>
+    <button class="menut" onclick="descartar()">Aquesta pregunta no serveix</button>
   </div>
 </section>
 
@@ -129,6 +163,7 @@
     <button class="buida" onclick="resoldre(false)">Error</button>
     <button onclick="resoldre(true)">Encert</button>
   </div>
+  <button class="menut" onclick="descartar()">Aquesta pregunta no serveix</button>
 </section>
 
 <!-- ───────────── FINAL ───────────── -->
@@ -136,7 +171,8 @@
   <div class="empenta" style="margin-top:auto;margin-bottom:auto">
     <p class="peu">Partida acabada</p>
     <div class="guanyador" id="txt-guanyador"></div>
-    <p class="peu" id="txt-resum"></p>
+    <div class="taula-final" id="taula-final"></div>
+    <div class="descartades" id="descartades" style="display:none"></div>
     <button class="ample buida" style="margin-top:24px" onclick="location.reload()">Una altra partida</button>
   </div>
 </section>
@@ -148,11 +184,18 @@
    pel seu nom, així que ha de coincidir amb el nom oficial d'OpenStreetMap. */
 
 const CATEGORIES = [
-  { id: "carrers",   nom: "Carrers",             color: "var(--c1)" },
-  { id: "places",    nom: "Places i racons",     color: "var(--c2)" },
-  { id: "rambles",   nom: "Avingudes i rambles", color: "var(--c3)" },
-  { id: "monuments", nom: "Monuments",           color: "var(--c4)" }
+  { id: "carrers",   nom: "Carrers",             color: "var(--c1)",
+    instruccio: "Situa'l: digues entre quins dos carrers passa, o quin carrer hi ha a cada punta." },
+  { id: "places",    nom: "Places i racons",     color: "var(--c2)",
+    instruccio: "Digues a quin carrer dóna i què hi ha al voltant." },
+  { id: "rambles",   nom: "Avingudes i rambles", color: "var(--c3)",
+    instruccio: "Digues d'on a on va, i en quina direcció." },
+  { id: "monuments", nom: "Monuments",           color: "var(--c4)",
+    instruccio: "Digues a quin carrer o plaça és." }
 ];
+
+const INSTRUCCIO_REPTE = "Digues el carrer o la plaça exacta on és. Aquí no val aproximar-s'hi.";
+const SEGONS = 20;
 
 const PREGUNTES = {
   carrers: [
@@ -205,10 +248,23 @@ const ZONA = "1.228,41.152,1.278,41.105";
 let nJugadors = 2;
 let jugadors = [];
 let torn = 0;
-let actual = null;          // { text, categoria, esRepte }
-const memoria = new Map();  // nom -> {lat, lon}
+let actual = null;          // { text, categoria, esRepte, pista }
+const memoria = new Map();  // nom -> {lat, lon, barri}
 let mapa = null;
+let rellotge = null;
+let queden = 0;
+let pintaRellotge = null;
 const vistes = new Set();
+
+/* Memòria entre partides: noms dels jugadors i preguntes descartades. */
+function llegeix(clau) {
+  try { return JSON.parse(localStorage.getItem("ones_" + clau)); } catch (e) { return null; }
+}
+function desa(clau, valor) {
+  try { localStorage.setItem("ones_" + clau, JSON.stringify(valor)); } catch (e) { /* sense memòria i avall */ }
+}
+
+const DESCARTADES = new Set(llegeix("descartades") || []);
 
 /* ══════════ INICI ══════════ */
 
@@ -220,6 +276,7 @@ function canviaJugadors(d) {
 
 function pintaCamps() {
   const cont = document.getElementById("camps");
+  const desats = llegeix("noms") || [];
   const previs = [...cont.querySelectorAll("input")].map(i => i.value);
   cont.innerHTML = "";
   for (let i = 0; i < nJugadors; i++) {
@@ -227,7 +284,7 @@ function pintaCamps() {
     inp.type = "text";
     inp.placeholder = "Jugador " + (i + 1);
     inp.maxLength = 16;
-    inp.value = previs[i] || "";
+    inp.value = previs[i] || desats[i] || "";
     cont.appendChild(inp);
   }
 }
@@ -235,8 +292,12 @@ function pintaCamps() {
 function comencar() {
   jugadors = [...document.querySelectorAll("#camps input")].map((inp, i) => ({
     nom: inp.value.trim() || "Jugador " + (i + 1),
-    formatgets: new Set()
+    formatgets: new Set(),
+    progres: {},  // categoria -> encerts acumulats (en calen 2)
+    encerts: 0,
+    fallades: 0
   }));
+  desa("noms", jugadors.map(j => j.nom));
   torn = 0;
   pantalla("p-torn");
   pintaTorn();
@@ -255,8 +316,12 @@ function pintaMarcador(id) {
     <div class="fitxa ${i === torn ? "torn" : ""}">
       <div class="nom">${escapa(j.nom)}</div>
       <div class="formatgets">
-        ${CATEGORIES.map(c => `<div class="fg ${j.formatgets.has(c.id) ? "guanyat" : ""}"
-          style="${j.formatgets.has(c.id) ? "background:" + c.color : ""}"></div>`).join("")}
+        ${CATEGORIES.map(c => {
+          const guanyat = j.formatgets.has(c.id);
+          const mig = !guanyat && (j.progres[c.id] || 0) > 0;
+          return `<div class="fg ${guanyat ? "guanyat" : ""} ${mig ? "mig" : ""}"
+            style="${guanyat ? "background:" + c.color : mig ? "border-color:" + c.color : ""}"></div>`;
+        }).join("")}
       </div>
     </div>`).join("");
 }
@@ -264,24 +329,28 @@ function pintaMarcador(id) {
 function pintaTorn() {
   pintaMarcador("marcador");
   document.getElementById("titol-torn").textContent = "Toca a " + jugadors[torn].nom;
-  document.getElementById("botons-categoria").innerHTML = CATEGORIES.map(c => `
-    <button class="ample buida" style="border-color:${c.color};color:${c.color}"
-      onclick="jugar('${c.id}')">${c.nom}</button>`).join("");
+  document.getElementById("botons-categoria").innerHTML = CATEGORIES.map(c => {
+    const fet = jugadors[torn].formatgets.has(c.id);
+    return `<button class="ample buida" ${fet ? "disabled" : ""}
+      style="border-color:${c.color};color:${c.color}"
+      onclick="jugar('${c.id}')">${c.nom}${fet ? " · ja el tens" : ""}</button>`;
+  }).join("");
 }
 
 function tria(llista) {
-  const fresc = llista.filter(x => !vistes.has(x));
-  const font = fresc.length ? fresc : llista;
-  const x = font[Math.floor(Math.random() * font.length)];
+  const bones = llista.filter(x => !DESCARTADES.has(x));
+  const font = bones.length ? bones : llista;
+  const fresc = font.filter(x => !vistes.has(x));
+  const final = fresc.length ? fresc : font;
+  const x = final[Math.floor(Math.random() * final.length)];
   vistes.add(x);
   return x;
 }
 
 function jugar(catId) {
   const cat = CATEGORIES.find(c => c.id === catId);
-  const teFormatget = jugadors[torn].formatgets.has(catId);
-  // Si encara no té el formatget d'aquesta categoria, li toca el repte.
-  const esRepte = !teFormatget;
+  // Primer encert: pregunta normal. Segon: el repte, que tanca el formatget.
+  const esRepte = (jugadors[torn].progres[catId] || 0) >= 1;
 
   actual = {
     categoria: cat,
@@ -291,15 +360,93 @@ function jugar(catId) {
 
   pintaMarcador("marcador-2");
   document.getElementById("targeta").style.borderTopColor = cat.color;
-  document.getElementById("cat-actual").textContent = cat.nom;
+  document.getElementById("cat-actual").textContent = cat.nom + (esRepte ? " · repte" : "");
   document.getElementById("enunciat").textContent = actual.text;
   document.getElementById("repte-avis").style.display = esRepte ? "block" : "none";
+  document.getElementById("instruccio").textContent = esRepte ? INSTRUCCIO_REPTE : cat.instruccio;
+  document.getElementById("pista-text").style.display = "none";
+  document.getElementById("btn-pista").disabled = false;
+  document.getElementById("btn-pista").textContent = "Pista";
   pantalla("p-pregunta");
+  arrencaRellotge();
+
+  // Es busca ja el lloc: així la pista és instantània i el mapa també.
+  localitza(actual.text).catch(() => {});
+}
+
+/* ══════════ PISTA ══════════ */
+
+async function demanarPista() {
+  const btn = document.getElementById("btn-pista");
+  const text = document.getElementById("pista-text");
+  btn.disabled = true;
+  btn.textContent = "Buscant…";
+  try {
+    const punt = await localitza(actual.text);
+    if (!punt.barri) throw new Error("sense barri");
+    text.textContent = "És al barri: " + punt.barri;
+    text.style.display = "block";
+    btn.textContent = "Pista feta";
+    retallaTemps(10);
+  } catch (e) {
+    text.textContent = "D'aquest no en tenim pista. Els 20 segons segueixen sencers.";
+    text.style.display = "block";
+    btn.textContent = "Sense pista";
+  }
+}
+
+/* ══════════ TEMPORITZADOR ══════════ */
+
+function arrencaRellotge() {
+  aturaRellotge();
+  queden = SEGONS;
+  const caixa = document.getElementById("rellotge");
+  pintaRellotge = () => {
+    document.getElementById("segons").textContent = queden;
+    document.getElementById("barra").style.width = (queden / SEGONS * 100) + "%";
+    caixa.classList.toggle("poc", queden <= 5);
+  };
+  pintaRellotge();
+  rellotge = setInterval(() => {
+    queden--;
+    pintaRellotge();
+    if (queden <= 0) {
+      aturaRellotge();
+      xiulet();
+      mostrarSolucio();
+    }
+  }, 1000);
+}
+
+// La pista costa temps: et deixa com a molt els segons que li diguis.
+function retallaTemps(maxim) {
+  if (queden > maxim) {
+    queden = maxim;
+    if (pintaRellotge) pintaRellotge();
+  }
+}
+
+function aturaRellotge() {
+  if (rellotge) { clearInterval(rellotge); rellotge = null; }
+}
+
+function xiulet() {
+  try {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const osc = ctx.createOscillator(), vol = ctx.createGain();
+    osc.frequency.value = 440;
+    vol.gain.setValueAtTime(.25, ctx.currentTime);
+    vol.gain.exponentialRampToValueAtTime(.001, ctx.currentTime + .6);
+    osc.connect(vol).connect(ctx.destination);
+    osc.start();
+    osc.stop(ctx.currentTime + .6);
+  } catch (e) { /* sense so i avall */ }
 }
 
 /* ══════════ SOLUCIÓ ══════════ */
 
 async function mostrarSolucio() {
+  aturaRellotge();
   document.getElementById("titol-solucio").textContent = actual.text;
   pantalla("p-solucio");
   const caixa = document.getElementById("mapa");
@@ -324,13 +471,18 @@ async function mostrarSolucio() {
 
 async function localitza(nom) {
   if (memoria.has(nom)) return memoria.get(nom);
-  const url = "https://nominatim.openstreetmap.org/search?format=json&limit=1&bounded=1"
+  const url = "https://nominatim.openstreetmap.org/search?format=json&limit=1&bounded=1&addressdetails=1"
     + "&viewbox=" + ZONA
     + "&q=" + encodeURIComponent(nom + ", Tarragona");
   const r = await fetch(url, { headers: { "Accept-Language": "ca" } });
   const dades = await r.json();
   if (!dades.length) throw new Error("no trobat");
-  const punt = { lat: +dades[0].lat, lon: +dades[0].lon };
+  const a = dades[0].address || {};
+  const punt = {
+    lat: +dades[0].lat,
+    lon: +dades[0].lon,
+    barri: a.neighbourhood || a.suburb || a.quarter || a.city_district || null
+  };
   memoria.set(nom, punt);
   return punt;
 }
@@ -338,23 +490,52 @@ async function localitza(nom) {
 /* ══════════ RESULTAT ══════════ */
 
 function resoldre(encert) {
-  if (encert && actual.esRepte) {
-    jugadors[torn].formatgets.add(actual.categoria.id);
-    if (jugadors[torn].formatgets.size === CATEGORIES.length) return final();
+  const j = jugadors[torn], cat = actual.categoria.id;
+
+  if (encert) {
+    j.encerts++;
+    j.progres[cat] = (j.progres[cat] || 0) + 1;
+    if (j.progres[cat] >= 2) {
+      j.formatgets.add(cat);
+      if (j.formatgets.size === CATEGORIES.length) return final();
+    }
+  } else {
+    j.fallades++;
   }
-  // Amb un encert repeteix torn; amb un error passa al següent.
-  if (!encert) torn = (torn + 1) % jugadors.length;
+
+  // El torn passa sempre, s'encerti o no.
+  torn = (torn + 1) % jugadors.length;
   pantalla("p-torn");
   pintaTorn();
 }
 
+/* Preguntes que no serveixen: es guarden i no tornen a sortir mai més.
+   No compten ni com a encert ni com a error; el mateix jugador en rep una altra. */
+function descartar() {
+  aturaRellotge();
+  DESCARTADES.add(actual.text);
+  desa("descartades", [...DESCARTADES]);
+  if (mapa) { mapa.remove(); mapa = null; }
+  jugar(actual.categoria.id);
+}
+
 function final() {
-  document.getElementById("txt-guanyador").textContent = jugadors[torn].nom;
-  const resta = jugadors
-    .filter((_, i) => i !== torn)
-    .map(j => j.nom + " " + j.formatgets.size + "/4")
-    .join(" · ");
-  document.getElementById("txt-resum").textContent = resta;
+  const guanyador = jugadors[torn];
+  document.getElementById("txt-guanyador").textContent = guanyador.nom;
+
+  document.getElementById("taula-final").innerHTML = [...jugadors]
+    .sort((a, b) => b.formatgets.size - a.formatgets.size || b.encerts - a.encerts)
+    .map(j => `<div>
+        <span>${escapa(j.nom)}</span>
+        <span>${j.formatgets.size}/4 formatgets · ${j.encerts} encerts · ${j.fallades} errors</span>
+      </div>`).join("");
+
+  if (DESCARTADES.size) {
+    document.getElementById("descartades").style.display = "block";
+    document.getElementById("descartades").innerHTML =
+      "<b>Preguntes descartades</b>" + [...DESCARTADES].map(escapa).join(" · ");
+  }
+
   pantalla("p-final");
 }
 
